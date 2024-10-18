@@ -24,17 +24,17 @@ bucket = oss2.Bucket(
 )
 
 DB_CONFIG = {
-    'host': '127.0.0.1',
+    'host': '10.100.5.125',
     'user': 'root',
-    'password': 'root123',
+    'password': 'YCph4YYcB3Ag',
     'database': 'external_data'
 }
 
 def connect_to_database():
     return mysql.connector.connect(
-        host='127.0.0.1',
+        host='10.100.5.125',
         user='root',
-        password='root123',
+        password='xxx',
         database='external_data',
         charset="utf8mb4"
     )
@@ -249,13 +249,13 @@ if __name__ == '__main__':
     try:
         connection = connect_to_database()
         user_map = {
-            # '秦苒': 'https://www.douyin.com/user/MS4wLjABAAAANFgQxszykCn7A-QQb47sIUXx7mPIzZxAo0uA2ZpVt6FXkDkQtq4cPwuolK-ajRmq?from_tab_name=main',
-            # '王七叶': 'https://www.douyin.com/user/MS4wLjABAAAAx9bJJ-j_53d3oTtZGZ5c1Eo2ZhGRIerp0QrsHK5Dc8I?from_tab_name=main',
-            '林鸽': 'https://www.douyin.com/user/MS4wLjABAAAAZ3a-wZdXHkzmT7MHMGWwVbWze331dnRnjY2djIVYe4JN_wbsrnMCV8EE2aRNb_Ne?_sw=4046619020373895&from_tab_name=main',
+            # '林鸽': 'https://www.douyin.com/user/MS4wLjABAAAAZ3a-wZdXHkzmT7MHMGWwVbWze331dnRnjY2djIVYe4JN_wbsrnMCV8EE2aRNb_Ne?_sw=4046619020373895&from_tab_name=main',
             # '丁公子': 'https://www.douyin.com/user/MS4wLjABAAAAS3pOM-LyGmbfLKmpgKsiobmZUw9uHP5irTeVePR-y96YEwJyCuto3jBW5navVv4o?from_tab_name=main',
             # '莫邪': 'https://www.douyin.com/user/MS4wLjABAAAAdLun70v1eGwI6FuPoE7leS5_6hDfvPfXkxAq5ytwFkI?from_tab_name=main',
-            # '姜十七': 'https://www.douyin.com/user/MS4wLjABAAAAjVocn5B2KaVZX7O3N4CJxPXlHAFVFkBpMIRs99SJ6KYQZnCsJ2L3LOFjvgj9xuaD?from_tab_name=main',
-            # '祝晓晗': 'https://www.douyin.com/user/MS4wLjABAAAAm2w4lcbzh2wL9mgguS2aSk4v8qmMKCyq1K9zK0sx1dY?from_tab_name=main'
+            '姜十七': 'https://www.douyin.com/user/MS4wLjABAAAAjVocn5B2KaVZX7O3N4CJxPXlHAFVFkBpMIRs99SJ6KYQZnCsJ2L3LOFjvgj9xuaD?from_tab_name=main'
+            # '祝晓晗': 'https://www.douyin.com/user/MS4wLjABAAAAm2w4lcbzh2wL9mgguS2aSk4v8qmMKCyq1K9zK0sx1dY?from_tab_name=main',
+            # '秦苒': 'https://www.douyin.com/user/MS4wLjABAAAANFgQxszykCn7A-QQb47sIUXx7mPIzZxAo0uA2ZpVt6FXkDkQtq4cPwuolK-ajRmq?from_tab_name=main',
+            # '王七叶': 'https://www.douyin.com/user/MS4wLjABAAAAx9bJJ-j_53d3oTtZGZ5c1Eo2ZhGRIerp0QrsHK5Dc8I?from_tab_name=main'
         }
 
         # 循环遍历字典，使用昵称和URL
@@ -265,20 +265,3 @@ if __name__ == '__main__':
 
     finally:
         connection.close()
-
-
-DB_CONFIG = {
-    'host': '10.100.5.125',
-    'user': 'root',
-    'password': 'YCph4YYcB3Ag',
-    'database': 'external_data'
-}
-
-def connect_to_database():
-    return mysql.connector.connect(
-        host='10.100.5.125',
-        user='root',
-        password='YCph4YYcB3Ag',
-        database='external_data',
-        charset="utf8mb4"
-    )
