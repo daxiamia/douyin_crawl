@@ -23,18 +23,11 @@ bucket = oss2.Bucket(
     oss2.Auth(access_key_id, access_key_secret), endpoint, bucket_name
 )
 
-DB_CONFIG = {
-    'host': '10.100.5.125',
-    'user': 'root',
-    'password': 'YCph4YYcB3Ag',
-    'database': 'external_data'
-}
-
 def connect_to_database():
     return mysql.connector.connect(
         host='10.100.5.125',
         user='root',
-        password='xxx',
+        password='YCph4YYcB3Ag',
         database='external_data',
         charset="utf8mb4"
     )
@@ -44,7 +37,7 @@ def insert_file_url(connection, uid, nickname, vid, desc_msg, online_time, oss_p
                     collect_count, share_count, url):
     cursor = connection.cursor()
     try:
-        insert_query = "INSERT INTO wangpan_douyin_video (uid, nickname, vid, desc_msg, online_time, oss_path, comment_count, digg_count, collect_count, share_count, url_path, status, create_time) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, now())"
+        insert_query = "INSERT INTO short_play_douyin_video (uid, nickname, vid, desc_msg, online_time, oss_path, comment_count, digg_count, collect_count, share_count, url_path, status, create_time) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, now())"
         cursor.execute(insert_query, (
         uid, nickname, vid, desc_msg, online_time, oss_path, comment_count, digg_count, collect_count, share_count,
         url))
@@ -55,7 +48,7 @@ def insert_file_url(connection, uid, nickname, vid, desc_msg, online_time, oss_p
 
 def update_record(connection, record_id, status):
     cursor = connection.cursor()
-    query = "UPDATE wangpan_douyin_video SET status = %s WHERE vid = %s"
+    query = "UPDATE short_play_douyin_video SET status = %s WHERE vid = %s"
     cursor.execute(query, (status, record_id))
     connection.commit()
     cursor.close()
@@ -119,6 +112,16 @@ def analyze_user_input(user_in: str):
         return
 
 
+def update_series_number(connection, vid, series_name):
+    cursor = connection.cursor()
+    try:
+        update_query = "update short_play_douyin_video set series_name = %s where vid = %s"
+        cursor.execute(update_query, (series_name, vid))
+        connection.commit()
+    finally:
+        cursor.close()
+
+
 def crawl_media_scan(user_in: str, connection):
     # douyin不使用代理
     os.environ['NO_PROXY'] = 'douyin.com'
@@ -148,6 +151,12 @@ def crawl_media_scan(user_in: str, connection):
                 url = i["video"]["play_addr"]["url_list"][0]
                 vid = str(i["aweme_id"])
                 oss_path = 'oss://datas-aigc/aigc/short_play/10短剧内容库/大V/' + nickname + '/' + description
+                try :
+                    series_number = i["series_info"]["stats"]["current_episode"]
+                    series_name = i["series_info"]["series_name"]
+                except Exception as e:
+                    continue
+                print(series_number)
                 comment_count = i["statistics"]["comment_count"]
                 digg_count = i["statistics"]["digg_count"]
                 collect_count = i["statistics"]["collect_count"]
@@ -188,7 +197,7 @@ def crawl_media_down(user_in: str, connection, nickname: str):
     if sec_uid is None:
         exit("粘贴的用户主页地址格式错误")
 
-    query = "SELECT desc_msg, url_path, nickname, vid FROM wangpan_douyin_video where status=0 and nickname=%s"
+    query = "SELECT desc_msg, url_path, nickname, vid FROM short_play_douyin_video where status=0 and nickname=%s"
     cursor.execute(query, (nickname,))
     result = cursor.fetchall()
     for i in result:
@@ -229,10 +238,11 @@ def download_media(session: requests.Session, sec_uid, video_list, picture_list)
                     print(f"网络异常 Status code: {response.status_code}")
 
         for i in picture_list:
-            url = i
+            url = i[0]
+            series_name = i[1]
             with session.get(url, stream=True) as response:
                 if response.status_code == 200:
-                    file_name = my_util.IDGenerator.generate_unique_id()
+                    file_name = series_name
                     with open(f'{file_name}.jpg', "wb") as f:
                         for chunk in response.iter_content(chunk_size=8192):
                             if chunk:
@@ -244,24 +254,77 @@ def download_media(session: requests.Session, sec_uid, video_list, picture_list)
     print('用户视频图片已全部下载完成')
     os.chdir('..')
 
+def insert_series_name(connection, series_name, nickname, pic_url):
+    cursor = connection.cursor()
+    try:
+        insert_query = "INSERT IGNORE INTO short_play_douyin_video_series (series_name, nickname, pic_url) VALUES (%s, %s, %s)"
+        cursor.execute(insert_query, (series_name, nickname, pic_url))
+        connection.commit()
+    except Exception as e:
+        print(f"Error inserting series name: {e}")
+    finally:
+        cursor.close()
+
+# 上传短剧海报到 OSS
+def download_media_pic(user_in: str, connection):
+    # douyin不使用代理
+    os.environ['NO_PROXY'] = 'douyin.com'
+    video_list = []
+    picture_list = []
+    session = get_global_session()
+
+    sec_uid = analyze_user_input(user_in)
+    if sec_uid is None:
+        exit("粘贴的用户主页地址格式错误")
+
+    cursor = 0
+    while 1:
+        home_url = f'https://www.douyin.com/aweme/v1/web/aweme/post/?aid=6383&sec_user_id={sec_uid}&count=18&max_cursor={cursor}&cookie_enabled=true&platform=PC&downlink=6.9'
+        xbs = XBogusUtil.generate_url_with_xbs(home_url, get_global_session().headers.get('User-Agent'))
+        # 计算出X-Bogus参数拼接到url
+        url = home_url + '&X-Bogus=' + xbs
+        json_str = session.get(url).json()
+
+        cursor = json_str["max_cursor"]  # 当页页码
+        for i in json_str["aweme_list"]:
+            #  视频收集
+            if i["images"] is None:
+                nickname = i["author"]["nickname"]
+                try :
+                    series_name = i["series_info"]["series_name"]
+                    pic_url = i["series_info"]["cover_url"]["url_list"][1]
+                    insert_series_name(connection, series_name, nickname, pic_url)
+                    picture_list.append([pic_url, series_name])
+                except Exception as e:
+                    continue
+                    
+        # 如果has_more为0说明已经到了尾页，结束爬取
+        if json_str["has_more"] == 0:
+            break
+        # 随机睡眠
+        my_util.random_sleep()
+
+    download_media(session, sec_uid, video_list, picture_list)
 
 if __name__ == '__main__':
     try:
         connection = connect_to_database()
         user_map = {
-            # '林鸽': 'https://www.douyin.com/user/MS4wLjABAAAAZ3a-wZdXHkzmT7MHMGWwVbWze331dnRnjY2djIVYe4JN_wbsrnMCV8EE2aRNb_Ne?_sw=4046619020373895&from_tab_name=main',
-            # '丁公子': 'https://www.douyin.com/user/MS4wLjABAAAAS3pOM-LyGmbfLKmpgKsiobmZUw9uHP5irTeVePR-y96YEwJyCuto3jBW5navVv4o?from_tab_name=main',
-            # '莫邪': 'https://www.douyin.com/user/MS4wLjABAAAAdLun70v1eGwI6FuPoE7leS5_6hDfvPfXkxAq5ytwFkI?from_tab_name=main',
-            '姜十七': 'https://www.douyin.com/user/MS4wLjABAAAAjVocn5B2KaVZX7O3N4CJxPXlHAFVFkBpMIRs99SJ6KYQZnCsJ2L3LOFjvgj9xuaD?from_tab_name=main'
-            # '祝晓晗': 'https://www.douyin.com/user/MS4wLjABAAAAm2w4lcbzh2wL9mgguS2aSk4v8qmMKCyq1K9zK0sx1dY?from_tab_name=main',
-            # '秦苒': 'https://www.douyin.com/user/MS4wLjABAAAANFgQxszykCn7A-QQb47sIUXx7mPIzZxAo0uA2ZpVt6FXkDkQtq4cPwuolK-ajRmq?from_tab_name=main',
-            # '王七叶': 'https://www.douyin.com/user/MS4wLjABAAAAx9bJJ-j_53d3oTtZGZ5c1Eo2ZhGRIerp0QrsHK5Dc8I?from_tab_name=main'
+            '林鸽': 'https://www.douyin.com/user/MS4wLjABAAAAZ3a-wZdXHkzmT7MHMGWwVbWze331dnRnjY2djIVYe4JN_wbsrnMCV8EE2aRNb_Ne?_sw=4046619020373895&from_tab_name=main',
+            '丁公子': 'https://www.douyin.com/user/MS4wLjABAAAAS3pOM-LyGmbfLKmpgKsiobmZUw9uHP5irTeVePR-y96YEwJyCuto3jBW5navVv4o?from_tab_name=main',
+            '莫邪': 'https://www.douyin.com/user/MS4wLjABAAAAdLun70v1eGwI6FuPoE7leS5_6hDfvPfXkxAq5ytwFkI?from_tab_name=main',
+            '姜十七': 'https://www.douyin.com/user/MS4wLjABAAAAjVocn5B2KaVZX7O3N4CJxPXlHAFVFkBpMIRs99SJ6KYQZnCsJ2L3LOFjvgj9xuaD?from_tab_name=main',
+            '祝晓晗': 'https://www.douyin.com/user/MS4wLjABAAAAm2w4lcbzh2wL9mgguS2aSk4v8qmMKCyq1K9zK0sx1dY?from_tab_name=main',
+            '秦苒': 'https://www.douyin.com/user/MS4wLjABAAAANFgQxszykCn7A-QQb47sIUXx7mPIzZxAo0uA2ZpVt6FXkDkQtq4cPwuolK-ajRmq?from_tab_name=main',
+            '王七叶': 'https://www.douyin.com/user/MS4wLjABAAAAx9bJJ-j_53d3oTtZGZ5c1Eo2ZhGRIerp0QrsHK5Dc8I?from_tab_name=main'
         }
 
         # 循环遍历字典，使用昵称和URL
         for nickname, url in user_map.items():
             crawl_media_scan(url, connection)
             crawl_media_down(url, connection, nickname)
+            # 下载短剧封面到本地，在手动上传到 OSS
+            # download_media_pic(url, connection)
 
     finally:
         connection.close()
