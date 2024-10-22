@@ -297,7 +297,7 @@ def download_media_pic(user_in: str, connection):
                     picture_list.append([pic_url, series_name])
                 except Exception as e:
                     continue
-                    
+
         # 如果has_more为0说明已经到了尾页，结束爬取
         if json_str["has_more"] == 0:
             break
